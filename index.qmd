@@ -1,0 +1,31 @@
+---
+title: "Lab 02"
+subtitle: "Julia Basics"
+author: "CEVE 421/521"
+jupyter: julia-1.9
+date: 2024-01-19
+format: 
+    html: default
+#    pdf:
+#        documentclass: article
+#        fontsize: 10pt
+#        geometry:
+#            - margin=1in  
+#    docx: 
+#        toc: true
+#        fig-format: png
+
+date-format: "ddd., MMM. D"
+---
+
+## Overview
+
+This is a placeholder for a lab that will introduce you to the Julia programming language.
+
+## Submitting your work
+
+In lab 01, you learned how to render a Quarto document.
+For this lab (and all subsequent labs) you will submit your code via Google Classroom and your *rendered output* via Canvas:
+
+1. Commit and push all your changes to GitHub classroom.
+1. Render your document to PDF or Word and submit that file to Canvas.
