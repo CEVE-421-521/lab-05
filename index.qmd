@@ -4,6 +4,9 @@ subtitle: "BRICK"
 author: "CEVE 421/521"
 jupyter: julia-1.9
 date: 2024-02-16
+week: 06
+categories: [Lab]
+
 format: 
     html: default
 #    pdf:
