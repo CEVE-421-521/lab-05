@@ -184,7 +184,7 @@ $$
 
 The authors note:
 
-> In this model, the parameters $a$, $b$, and $c$ represent the reasonably well-characterized process of thermosteric expansion as a second-order polynomial. It also accounts for more poorly understood processes, including potential abrupt sealevel rise consistent with sudden changes in ice flow dynamics.Here, $c^*$ represents an increase in the rate of sea-level rise that takes place at some uncertain time, $t^*$, in the future.
+> In this model, the parameters $a$, $b$, and $c$ represent the reasonably well-characterized process of thermosteric expansion as a second-order polynomial. It also accounts for more poorly understood processes, including potential abrupt sealevel rise consistent with sudden changes in ice flow dynamics. Here, $c^*$ represents an increase in the rate of sea-level rise that takes place at some uncertain time, $t^*$, in the future.
 
 This is, of course, a highly simplified model.
 However, the parameters can be calibrated to match historical sea-level rise (i.e., throwing out any parameter values that don't match the historical record) and use a statistical inversion method to estimate the parameters.
