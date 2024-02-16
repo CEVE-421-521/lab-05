@@ -128,10 +128,11 @@ For example:
 #| code-fold: true
 let
     depths = uconvert.(u"ft", (-7.0u"ft"):(1.0u"inch"):(30.0u"ft"))
-    damages = house.ddf.(depths) .* house.value_usd ./ 1000
+    damages = house.ddf.(depths) ./ 100
+    damages_1000_usd = damages .* house.value_usd ./ 1000
     scatter(
         depths,
-        damages;
+        damages_1000_usd;
         xlabel="Flood Depth",
         ylabel="Damage (Thousand USD)",
         label="$(house.description)\n($(house.source))",
