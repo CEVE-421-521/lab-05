@@ -1,0 +1,62 @@
+---
+title: "Lab 5: Sea-Level Rise"
+author: "<Your Name (NetID)>"
+jupyter: julia-1.10
+date: 2024-02-16
+
+format: 
+    html: default
+
+    # YOU DO NOT NEED BOTH PDF AND DOCX.
+    # COMMENT OR DELETE THE ONE YOU DON'T WANT TO USE.
+    pdf:
+        documentclass: article
+        fontsize: 11pt
+        geometry:
+            - margin=1in  
+        number-sections: true
+        code-line-numbers: true
+    #docx: 
+    #    toc: true
+    #    fig-format: png
+    #    number-sections: true
+    #    code-line-numbers: true
+
+date-format: "ddd., MMM. D"
+bibliography: references.bib
+---
+
+# Setup
+
+## The usual
+
+As always:
+
+1. Clone the lab repository to your computer
+1. Open the lab repository in VS Code
+1. Open the Julia REPL and activate, then instantiate, the lab environment
+1. Make sure you can render: `quarto render template.qmd` in the terminal.
+    - If you run into issues, try running `] build IJulia` in the Julia REPL (`]` enters the package manager).
+    - If you still have issues, try opening up `blankfile.py`. That should trigger VS Code to give you the option to install the Python extension, which you should do. Then you should be able to open a menu in the bottom right of your screen to select which Python installation you want VS Code to use.
+
+
+## Load packages
+
+```{julia}
+using CSV
+using DataFrames
+using DataFramesMeta
+using Distributions
+using Plots
+using StatsPlots
+using Unitful
+
+Plots.default(; margin=5Plots.mm)
+```
+
+## Local package
+
+```{julia}
+using Revise
+using HouseElevation
+```

@@ -1,6 +1,5 @@
 ---
 title: "Lab 5: Sea-Level Rise"
-subtitle: "BRICK"
 author: "CEVE 421/521"
 jupyter: julia-1.10
 date: 2024-02-16
@@ -19,15 +18,294 @@ format:
             - margin=1in  
         number-sections: true
         code-line-numbers: true
-    docx: 
-        toc: true
-        fig-format: png
-        number-sections: true
-        code-line-numbers: true
+    #docx: 
+    #    toc: true
+    #    fig-format: png
+    #    number-sections: true
+    #    code-line-numbers: true
 
 date-format: "ddd., MMM. D"
+bibliography: references.bib
 ---
 
-## Overview
+There are two objectives of this lab:
 
-This is a placeholder.
+1. To familiarize ourselves with an increasingly complex model of our house-elevation problem
+2. To conduct exploratory modeling to understand the implications of different parameter values and how they affect our decision-making
+
+# Setup
+
+## The usual
+
+As always:
+
+1. Clone the lab repository to your computer
+1. Open the lab repository in VS Code
+1. Open the Julia REPL and activate, then instantiate, the lab environment
+1. Make sure you can render: `quarto render template.qmd` in the terminal.
+    - If you run into issues, try running `] build IJulia` in the Julia REPL (`]` enters the package manager).
+    - If you still have issues, try opening up `blankfile.py`. That should trigger VS Code to give you the option to install the Python extension, which you should do. Then you should be able to open a menu in the bottom right of your screen to select which Python installation you want VS Code to use.
+
+
+## Load packages
+
+```{julia}
+using CSV
+using DataFrames
+using DataFramesMeta
+using Distributions
+using Plots
+using StatsPlots
+using Unitful
+
+Plots.default(; margin=5Plots.mm)
+```
+
+## Local package
+
+We're starting to accumulate a lot of code describing our model.
+A good way to store this model is by creating a local package.
+I have created a package called `HouseElevation` that contains the model code.
+You don't need to do anything special to install it, and you don't need to edit the code, though I'd encourage you to have a look around!
+
+When we work with local packages, it's common to use another package called `Revise`.
+This is a cool package that will automatically propagate any changes you make to the package to any code that uses the package.
+You don't need to worry about this for now -- just load them.
+
+```{julia}
+using Revise
+using HouseElevation
+```
+
+# Building the model
+
+We've added a bit of complexity to our model.
+In this section, we walk through each of the sections of the model.
+
+## House
+
+::: {.callout-important}
+We will consider a single house, and will ignore uncertainty in the depth-damage function or other house parameters
+:::
+
+- Neglect uncertainty in depth-damage function
+- Consider a single building
+- We're going to put all relevant information into a `House` object:
+    - Depth-damage function
+    - Area
+    - Cost (USD)
+    - Elevation relative to gauge
+    - Metadata
+
+We can create a `House` as follows -- note that we're using a `let...end` block to create the `House` object.
+This means that any variables defined inside the block are not available outside the block, which is a good way to avoid "polluting the global namespace."
+
+```{julia}
+#| output: false
+house = let
+    haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame) # read in the file
+    desc = "one story, Contents, fresh water, short duration"
+    row = @rsubset(haz_fl_dept, :Description == desc)[1, :] # select the row I want
+    area = 500u"ft^2"
+    height_above_gauge = 10u"ft"
+    House(
+        row;
+        area=area,
+        height_above_gauge=height_above_gauge,
+        value_usd=250_000,
+    )
+end
+```
+
+We can then use the `House` object to calculate the damage to the house for a given flood depth.
+Let's convert the damage to dollars by multiplying the fraction (given by our depth-damage function) by the value of the house.
+For example:
+
+```{julia}
+#| code-fold: true
+let
+    depths = uconvert.(u"ft", (-7.0u"ft"):(1.0u"inch"):(30.0u"ft"))
+    damages = house.ddf.(depths) .* house.value_usd ./ 1000
+    scatter(
+        depths,
+        damages;
+        xlabel="Flood Depth",
+        ylabel="Damage (Thousand USD)",
+        label="$(house.description)\n($(house.source))",
+        legend=:bottomright,
+        size=(800, 400),
+        yformatter=:plain, # prevents scientific notation
+    )
+end
+```
+
+We can also use the `House` object to calculate the cost of raising the house to a given elevation.
+We use the `elevation_cost` function like this:
+
+```{julia}
+elevation_cost(house, 10u"ft")
+```
+
+and again we can plot this.
+
+```{julia}
+let
+    elevations = 0u"ft":0.25u"ft":14u"ft"
+    costs = [elevation_cost(house, eᵢ) for eᵢ in elevations]
+    scatter(
+        elevations,
+        costs ./ 1_000;
+        xlabel="Elevation",
+        ylabel="Cost (Thousand USD)",
+        label="$(house.description)\n($(house.source))",
+        legend=:bottomright,
+        size=(800, 400),
+        yformatter=:plain, # prevents scientific notation
+    )
+end
+```
+
+## Sea-level rise
+
+::: {.callout-important}
+We will sample many different scenarios of sea-level rise
+:::
+
+We're modeling sea-level rise following the approach of @oddo_coastal:2017.
+Essentially, we use five parameters: $a$, $b$, $c$, $t^*$, and $c^*$.
+The local sea-level in year $t$ is given by equation 6 of @oddo_coastal:2017:
+
+$$
+\mathrm{SLR}= a + b(t - 2000) + c (t - 2000)^2 + c^* \, \mathbb{I} (t > t^*) (t - t^*)
+$$
+
+The authors note:
+
+> In this model, the parameters $a$, $b$, and $c$ represent the reasonably well-characterized process of thermosteric expansion as a second-order polynomial. It also accounts for more poorly understood processes, including potential abrupt sealevel rise consistent with sudden changes in ice flow dynamics.Here, $c^*$ represents an increase in the rate of sea-level rise that takes place at some uncertain time, $t^*$, in the future.
+
+This is, of course, a highly simplified model.
+However, the parameters can be calibrated to match historical sea-level rise (i.e., throwing out any parameter values that don't match the historical record) and use a statistical inversion method to estimate the parameters.
+One could also calibrate the parameters to match other, more complex, physics-based models.
+We'll use Monte Carlo simulations from @oddo_coastal:2017, available on [GitHub](https://github.com/pcoddo/VanDantzig/blob/master/Model_Versions/Uncertainty_SLR/SLR_Module/Rejection_Sampling/beta/output/array_beta.txt).
+These were actually calibrated for the Netherlands, but we'll pretend that sea-level rise in your location matches (which -- as we know -- it doesn't).
+
+```{julia}
+#| output: false
+slr_scenarios = let
+    df = CSV.read("data/slr_oddo.csv", DataFrame)
+    [Oddo17SLR(a, b, c, tstar, cstar) for (a, b, c, tstar, cstar) in eachrow(df)]
+end
+println("There are $(length(slr_scenarios)) parameter sets")
+```
+
+We can plot these scenarios to get a sense of the range of sea-level rise we might expect.
+
+```{julia}
+let
+    years = 1900:2150
+    p = plot(;
+        xlabel="Year",
+        ylabel="Mean sea-level (ft)\nwith respect to the year 2000",
+        label="Oddo et al. (2017)",
+        legend=false
+    )
+    for s in rand(slr_scenarios, 250)
+        plot!(p, years, s.(years); color=:lightgrey, alpha=0.5, linewidth=0.5)
+    end
+    p
+end
+```
+
+The key insight you should take from this plot is that uncertainty in future sea level increases over time!
+
+## Storm surge
+
+::: {.callout-important}
+We will consider parametric uncertainty in the storm surge
+:::
+
+The next component of the model is the storm surge (i.e., the height of the flood above mean sea-level).
+We can model the water level _at the gauge_ as the sum of the local sea-level and the storm surge.
+We can then model the water level _at the house_ as the water level at the gauge minus the elevation of the house above the gauge.
+
+We will consider parametric uncertainty in the storm surge.
+From lab 3, you should have a `GeneralizedExtremeValue` distribution for the storm surge.
+We can then sample parameters from a range centered on this distribution.
+For example, in the example for lab 3 we had `GeneralizedExtremeValue(5, 1.5, 0.1)`.
+We can use this function to create a distribution for the storm surge.
+
+```{julia}
+function draw_surge_distribution()
+    μ = rand(Normal(5, 1))
+    σ = rand(Exponential(1.5))
+    ξ = rand(Normal(0.1, 0.05))
+    GeneralizedExtremeValue(μ, σ, ξ)
+end
+```
+
+We can then call this function many times to get many different distributions for the storm surge.
+For example,
+
+```julia
+[draw_surge_distribution() for _ in 1:1000]
+```
+
+::: {.callout-important}
+## Important
+
+This is NOT statistical estimation.
+We are not saying anything at all about whether these parameters are consistent with observations.
+In fact, even when parameters are uncertain, sampling around a point estimate in this manner usually produces lots of parameter values that are highly implausible.
+Here, we are just exploring the implications of different parameter values.
+Building a better model for storm surge is a great idea for your final project!
+:::
+
+## Discount rate
+
+::: {.callout-important}
+We will consider parametric uncertainty in the discount rate.
+:::
+
+The discount rate is an important economic parameter in our NPV analysis.
+There are elements of discounting that are perhaps not random (e.g., how much do you value the future versus the present?) while there are other elements that are very much random (what is the opportunity cost of spending money now?)
+We will model this by treating the discount rate as a random variable, but more sophisticated analyses are possible.
+We can use the following function
+
+```{julia}
+#| output: false
+function draw_discount_rate()
+    return rand(Normal(0.04, 0.02))
+end
+```
+
+Note that we are now defining the discount rate as a proportion (from 0 to 1) rather than a percentage (from 0 to 100).
+
+## Running a simulation
+
+```{julia}
+#| output: false
+p = ModelParams(
+    house=house,
+    years=2024:2083
+)
+```
+
+```{julia}
+#| output: false
+sow = SOW(
+    rand(slr_scenarios),
+    draw_surge_distribution(),
+    draw_discount_rate()
+)
+```
+
+```{julia}
+#| output: false
+a = Action(3.0u"ft")
+```
+
+```{julia}
+res = run_sim(a, sow, p)
+```
+
+# Exploratory modeling
