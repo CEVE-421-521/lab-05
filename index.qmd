@@ -26,6 +26,9 @@ format:
 
 date-format: "ddd., MMM. D"
 bibliography: references.bib
+
+execute: 
+  cache: true # disable this if you don't want to `pip install jupyter-cache`
 ---
 
 There are two objectives of this lab:
@@ -282,6 +285,12 @@ Note that we are now defining the discount rate as a proportion (from 0 to 1) ra
 
 ## Running a simulation
 
+In the notation we've seen in class, we have a system model $f$ that takes in a state of the world $\mathbf{s}$, an action $a$, and outputs some metric or metrics.
+I've reproduced this in our model, adding one extra piece: a `ModelParams` object that contains all the parameters of the model that *don't change from one simulation to the next.*
+
+In our model, the `ModelParams` are the house characteristics (area, value, and depth-damage curve) and the years we're considering.
+You should consider different time horizons!
+
 ```{julia}
 #| output: false
 p = ModelParams(
@@ -289,6 +298,10 @@ p = ModelParams(
     years=2024:2083
 )
 ```
+
+The next step is to create an object to hold our state of the world (SOW).
+We can create one like this.
+In the next step, we'll want to sample a large ensemble of SOWs.
 
 ```{julia}
 #| output: false
@@ -299,13 +312,85 @@ sow = SOW(
 )
 ```
 
+Last, we need to define our action.
+For now, our action is very simple: we're going to raise the house to a fixed elevation.
+However, in the future we might have a more complex action (e.g., when the sea level exceeds some threshold $t1$, raise the house by some fixed amount $t2$, which has two parameters).
+We define our action as follows:
+
 ```{julia}
 #| output: false
 a = Action(3.0u"ft")
 ```
+
+Finally, we have a function to run the simulation.
+This function takes in the model parameters, the state of the world, and the action, and returns the NPV of the action.
+Please have a look at [`run_sim.jl`](HouseElevation/src/run_sim.jl) to see how this is implemented!
 
 ```{julia}
 res = run_sim(a, sow, p)
 ```
 
 # Exploratory modeling
+
+Now that you've figured out how this model works, it's your turn to conduct some exploratory modeling.
+In [`template.qmd`](./template.qmd), I've provided only the code required to load packages.
+
+## Apply the model to your site
+
+1. Build your own house object, based on the house you've been using (or you can switch if you'd like)
+    a. Briefly explain where you got the area, value, and depth-damage curve from
+    a. Plot the depth-damage curve
+    a. Plot the cost of raising the house to different elevations from 0 to 14 ft
+2. Read in the sea-level rise data
+3. Modify my code to create a function to draw samples of storm surge and the discount rate. Explain your modeling choices!
+4. Define an illustrative action, SOW, and model parameters, and run a simulation.
+
+## Large ensemble
+
+Now that you've got the model working for your site, you should run a large ensemble of simulations (explain how you interpret "large").
+
+1. Sample many SOWs (see below)
+1. Sample a range of actions. You can do this randomly, or you can look at just a couple of actions (e.g., 0, 3, 6, 9, 12 ft) -- explain your choice.
+1. Run the simulations for each SOW and action. You can use a for loop for this.
+1. Create a DataFrame of your key inputs and results (see below)
+
+Here's how you can create a few SOWs and actions and run the simulations for each:
+
+```{julia}
+sows = [SOW(rand(slr_scenarios), draw_surge_distribution(), draw_discount_rate()) for _ in 1:10] # for 10 SOWs
+actions = [Action(3.0u"ft") for _ in 1:10] # these are all the same
+results = [run_sim(a, s, p) for (a, s) in zip(actions, sows)]
+```
+
+Here's how you can create a dataframe of your results.
+Each row corresponds to one simulation, and the columns are the inputs and outputs of the simulation.
+
+```{julia}
+df = DataFrame(
+    npv=results,
+    Δh_ft=[a.Δh_ft for a in actions],
+    slr_a=[s.slr.a for s in sows],
+    slr_b=[s.slr.b for s in sows],
+    slr_c=[s.slr.c for s in sows],
+    slr_tstar=[s.slr.tstar for s in sows],
+    slr_cstar=[s.slr.cstar for s in sows],
+    surge_μ=[s.surge_dist.μ for s in sows],
+    surge_σ=[s.surge_dist.σ for s in sows],
+    surge_ξ=[s.surge_dist.ξ for s in sows],
+    discount_rate=[s.discount_rate for s in sows],
+)
+```
+
+## Analysis
+
+Now, analyze your results.
+You can use scatterplots and other visualizations, or any other statistical analyses that you think may be helpful.
+Remember that the goal is to understand how different parameter values affect the success or failure of different actions.
+
+Some questions to consider:
+
+- When do you get the best results?
+- When do you get the worst results?
+- What are the most important parameters?
+- If you had unlimited computing power, would you run more simulations? How many?
+- What are the implications of your results for decision-making?
